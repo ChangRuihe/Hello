@@ -1,37 +1,43 @@
-## Welcome to GitHub Pages
 
-You can use the [editor on GitHub](https://github.com/ChangRuihe/Hello/edit/master/README.md) to maintain and preview the content for your website in Markdown files.
-
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
-
-### Markdown
-
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
-
-```markdown
-Syntax highlighted code block
-
-# Header 1
-## Header 2
-### Header 3
-
-- Bulleted
-- List
-
-1. Numbered
-2. List
-
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
 ```
+sequenceDiagram
 
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
+participant vm客户端
+participant msgGateWay
+participant msgCenter
+participant redis数据库
+participant pms
 
-### Jekyll Themes
 
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/ChangRuihe/Hello/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
+vm客户端->>pms:初始化配置请求
+pms-->>pms:根据售货机id 分配gateway接入信息
+pms-->>vm客户端:  
+vm客户端->>msgGateWay:建立连接,发送au请求
+msgGateWay->>msgCenter:发送给msgCenter处理au事件请求
+msgCenter->>pms:请求验证售货机合法性
+pms->pms: 验证售货机合法性并返回
+pms-->msgCenter: 
+msgCenter->>redis数据库:设置设备在线状态
+redis数据库-->>msgCenter:  
+msgCenter-->>msgGateWay:  
+msgGateWay-->>vm客户端:  返回认证结果
 
-### Support or Contact
+msgGateWay-->>msgGateWay:轮询检测与售货机的session 状态
+msgGateWay->>msgCenter:上报在线售货机心跳
+msgCenter->>redis数据库:设置最后在线时间戳
 
-Having trouble with Pages? Check out our [documentation](https://help.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
+vm客户端-->msgGateWay:售货机客户端断开连接
+msgGateWay-->>msgGateWay:轮询检测与售货机的session 状态
+msgGateWay->>msgCenter:发送售货机断连事件
+msgCenter->>redis数据库:设置设备在线状态
+
+pms-->>pms:执行轮询任务
+pms->>redis数据库: 检测设备状态及在线时间戳判断设备是否在线
+
+msgCenter->>msgCenter:执行调度任务
+msgCenter->>msgGateWay:心跳检测msgGateWay 状态
+msgGateWay-->>msgCenter:返回心跳结果异常
+msgCenter->>redis数据库:将挂载到msgGateWay的设备踢下线
+redis数据库-->>msgCenter: 返回
+
+```
